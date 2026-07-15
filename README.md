@@ -50,7 +50,9 @@ does the same job at campus scale. Part of the
 
 The DC supply feeds all three drivers directly; a small buck converter taps off
 it for the 5 V logic rail. Full wiring, the power tree, and **the reason the pin
-map looks the way it does** are in [docs/hardware.md](docs/hardware.md).
+map looks the way it does** are in [docs/hardware.md](docs/hardware.md); the
+parts list (core + indicator LEDs + IR remote) is in
+[hardware/BOM.md](hardware/BOM.md).
 
 > **Note on the pin map:** the LEDs live on PA3/PA4/PA5 and the joystick on
 > PA1/PA2/PA7 — not the other way around. On the ATtiny814 only PA3/PA4/PA5 can
@@ -83,6 +85,9 @@ glim/
 ├── src/main.cpp        firmware
 ├── include/config.h    pins + every tunable in one place
 ├── platformio.ini      build / upload config
+├── hardware/
+│   └── BOM.md           parts list + build plan (core, indicators, IR)
+├── ROADMAP.md          where it goes next
 └── docs/
     ├── hardware.md      wiring, power, pin-map rationale, programmer
     └── controls.md      the joystick UX and how to tune it

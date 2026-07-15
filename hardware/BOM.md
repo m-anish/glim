@@ -1,0 +1,115 @@
+# Bill of Materials & build plan
+
+A living parts list for glim. It covers the **core dimmer** (current rev1,
+hand-soldered) plus the two add-ons worth baking in now — **channel indicator
+LEDs** and the **IR remote**. Prices are rough per-unit ballparks (AliExpress /
+Indian hobby suppliers) to gauge scale, not quotes.
+
+## Variables to pin down first
+
+These change the BOM; defaults in brackets are what the rest of this doc assumes.
+
+| Choice | Default | Affects |
+|--------|---------|---------|
+| Supply voltage | 19 V / 3 A | Buck module rating, LED string sizing |
+| LEDs per channel | up to 5 | LED count, current budget, driver Rsense |
+| LED type | COB / star / strip | Load, mounting |
+| Remote strategy | learn-any-NEC | firmware only; any remote works |
+| Status pixel? | optional | 1 pin + 1 part |
+
+## Core dimmer (rev1)
+
+| # | Part | Qty | Role | ~Unit |
+|---|------|-----|------|-------|
+| 1 | **ATtiny814** (SOIC-14) | 1 | MCU — 3× PWM, 2× ADC, 1 button | $0.8 |
+| 2 | **PT4115 buck LED driver module** (7-pin: IN+/IN+/IN−/IN−/PWM/LED−/LED+) | 3 | one constant-current channel each | $1.2 |
+| 3 | **DC-DC buck module → 5 V** | 1 | logic + joystick rail | $1.0 |
+| 4 | **Analog joystick module** (KY-023, 5-pin GND/5V/X/Y/SW) | 1 | the entire UI | $1.0 |
+| 5 | LED load (your lighting) | ≤5 / ch | the actual light | varies |
+| 6 | DC power supply, 6–30 V | 1 | [19 V / 3 A on hand] | — |
+
+**Buck rating caveat:** size the buck's *max input* above your *max supply*. A
+common **MP1584** module tops out ~28 V — fine at 19 V, unsafe if you ever push to
+30 V. For full-range 6–30 V headroom use an **LM2596** (40 V) or a wide-input
+module. The 5 V output feeds both ATtiny VDD and the joystick's 5V, so the ADC
+stays ratiometric with the pots — good.
+
+## Passives & decoupling
+
+| # | Part | Qty | Role |
+|---|------|-----|------|
+| 7 | 100 nF ceramic | 2–3 | VDD decoupling at the ATtiny, one at the IR receiver |
+| 8 | 10 µF electrolytic/ceramic | 1 | bulk on the 5 V rail |
+| 9 | 1 kΩ resistor | 1 | **UPDI series** (serialUPDI) — already on the board |
+
+The ATtiny814 runs off its internal oscillator — no crystal, no support parts
+beyond decoupling.
+
+## Add-on A — channel indicator LEDs (0 extra pins)
+
+Piggyback straight on the PWM lines. Each indicator's brightness *mirrors* its
+channel's level for free — a live 3-bar meter by the joystick.
+
+| # | Part | Qty | Role |
+|---|------|-----|------|
+| 10 | Indicator LED (3 mm or 0805, your color) | 3 | one per channel |
+| 11 | 1 kΩ resistor | 3 | ~3 mA @ 5 V; negligible load on the pin |
+
+Wiring per channel: **PWM pin → LED anode, LED cathode → 1 kΩ → GND.** Lights when
+the pin is high, so brightness tracks duty. (Shows *level*, not *which channel is
+selected* — that's what Add-on C is for.)
+
+## Add-on B — IR remote
+
+| # | Part | Qty | Role | ~Unit |
+|---|------|-----|------|-------|
+| 12 | **TSOP38238** IR receiver (38 kHz, OUT/GND/VCC) | 1 | demodulated NEC in (VS1838B = cheaper, noisier) | $0.5 |
+| 13 | 100 Ω resistor | 1 | supply filter for the receiver | — |
+| 14 | 4.7 µF capacitor | 1 | supply filter (100 Ω + 4.7 µF), plus the 100 nF from row 7 | — |
+| 15 | **NEC IR remote** — 44-key RGB-strip remote *or* 17-key car-MP3 remote | 1 | the actual remote | $1.5 |
+
+- **Protocol:** NEC, 38 kHz. Both suggested remotes use it. Decode with a compact
+  hand-rolled NEC reader on **TCB0 input capture** (a few hundred bytes, fits the
+  minimalist budget) or the IRremote library for faster bring-up.
+- **Learn mode** (firmware, no extra parts) lets glim bind to *any* NEC remote —
+  including one your friend already owns. Recommended over hardcoding one remote's
+  codes, so a discontinued SKU never bricks the UI.
+- **Noise:** three switching drivers sit nearby. Use the 100 Ω + 4.7 µF supply
+  filter, the 100 nF at the receiver pins, and mount the TSOP away from the
+  drivers/inductors. Prefer TSOP38238 over VS1838B for AGC/noise immunity.
+- **Suggested pin:** IR OUT → **PA6** (free; keeps all of PORTB open).
+
+## Add-on C — status pixel (optional, the "you are here")
+
+The one thing three mirror-LEDs can't show is *which* channel is selected. A
+single addressable LED covers it: color = selected channel, plus distinct
+booting / all-off states.
+
+| # | Part | Qty | Role |
+|---|------|-----|------|
+| 16 | WS2812B (or a 2-color LED + 2× 1 kΩ) | 1 | selection / status indicator |
+
+- **Suggested pin:** data → **PB0**. megaTinyCore ships `tinyNeoPixel` for WS2812.
+
+## Pin allocation after add-ons
+
+| Pin | Assignment |
+|-----|------------|
+| PA0 | UPDI (program) |
+| PA1 / PA2 | Joystick X / Y (ADC) |
+| PA3 / PA4 / PA5 | LED PWM **+ indicator LEDs** (Add-on A) |
+| PA6 | IR receiver OUT (Add-on B) |
+| PA7 | Joystick SW |
+| PB0 | Status pixel data (Add-on C) |
+| PB1 / PB2 / PB3 | still free (I²C / UART / 3 more PWM channels) |
+
+Everything above still fits the ATtiny814 with 3 spare pins. See
+[../ROADMAP.md](../ROADMAP.md) for where it goes past that (up to 6 channels on
+the same chip) and [../docs/hardware.md](../docs/hardware.md) for the pin-map
+rationale and programmer wiring.
+
+## Rough cost (electronics, excl. PSU & LED load)
+
+Core ≈ $8–10 · indicator LEDs ≈ $0.3 · IR add-on ≈ $2–3 · status pixel ≈ $0.3.
+Call it **~$11–14** of parts for a fully-featured unit — the PSU and the light
+itself dominate the real cost.
