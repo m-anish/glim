@@ -95,6 +95,10 @@ persistence. Hardware is a hand-soldered board; a proper PCB (and possibly a
 larger MCU) may follow. The whole design is written to survive that: pins and
 behaviour are all in `config.h`.
 
+Where it goes next — indicator LEDs, IR remote, up to 6 channels on the same
+chip, and the line where it hands off to lokki — is in
+[ROADMAP.md](ROADMAP.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
