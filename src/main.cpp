@@ -4,70 +4,105 @@
 //                 how far you push)
 //   left / right  select which of the 3 channels you're controlling; the newly
 //                 selected channel blinks once so you know which light answered
-//   tap switch    toggle the selected channel on / off
-//   hold switch   all channels off
+//   tap switch    toggle the selected channel on / off (fades)
+//   hold switch   all channels off (fades)
 //
-// Levels are gamma-corrected for a linear-feeling ramp and persisted to EEPROM
-// a few seconds after the last change, so a wall-switch power cycle restores
-// the previous scene.
+// Signal flow per channel:
+//   setpoint level  → slewed display level (soft transitions)
+//                   → gamma curve (perceptually linear)
+//                   → high-res duty → dithering ISR (sub-LSB resolution)
+//                   → TCA0 split-mode PWM on PA3/PA4/PA5.
 //
-// The PWM is driven straight from TCA0 in split mode rather than analogWrite(),
-// because the three LED pins (PA3/PA4/PA5 = WO3/WO4/WO5) only exist as timer
-// outputs in split mode. millis() lives on TCD0, so TCA0 is ours to take over.
+// The PWM is driven straight from TCA0 rather than analogWrite(), because the
+// LED pins (PA3/PA4/PA5 = WO3/WO4/WO5) only exist as timer outputs in split
+// mode. millis() lives on TCD0, so TCA0 is ours to take over.
 
 #include <Arduino.h>
 #include <EEPROM.h>
+#include <avr/wdt.h>
+#include <util/atomic.h>
 #include "config.h"
+
+#define DITHER_STEPS (1u << DITHER_BITS)          // sub-frames per dither cycle
+#define HR_MAX       ((uint16_t)255 << DITHER_BITS) // full-scale high-res duty
+#define FADE_SLEW    (((int32_t)255 << 8) / FADE_MS) // display slew, level<<8 per ms
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
-static uint8_t  level[NUM_CHANNELS];    // logical brightness 0..255 (0 = dark)
+static uint8_t  level[NUM_CHANNELS];    // setpoint brightness 0..255 (0 = dark)
 static bool     muted[NUM_CHANNELS];    // toggled off, but remembers its level
 static int32_t  levelAcc[NUM_CHANNELS]; // ramp accumulator, level << 8
+static int32_t  disp[NUM_CHANNELS];     // slewed display level, level << 8
 static uint8_t  selected = 0;           // channel the joystick is steering
 
-static int16_t  centreX = 512;          // auto-measured at boot
+// Shared with the dither ISR — high-res duty target per channel (0..HR_MAX).
+static volatile uint16_t dutyHR[NUM_CHANNELS];
+
+static int16_t  centreX = 512;          // joystick centres, auto-measured at boot
 static int16_t  centreY = 512;
 
-static uint32_t lastTick = 0;           // for ramp dt
+static uint32_t lastTick = 0;
 static bool     dirty = false;          // state changed since last EEPROM save
-static uint32_t dirtyAt = 0;            // when it last changed
+static uint32_t dirtyAt = 0;
 
-// EEPROM layout: a magic marker so we can tell a blank chip from saved state.
-#define EE_MAGIC 0x676C          // "gl"
+// EEPROM layout: magic + version so future firmware can migrate rather than
+// wipe the saved scene.
+#define EE_MAGIC   0x676C               // "gl"
+#define EE_VERSION 1
 struct Persist {
   uint16_t magic;
+  uint8_t  version;
   uint8_t  selected;
   uint8_t  level[NUM_CHANNELS];
   uint8_t  muted[NUM_CHANNELS];
 };
 
 // ---------------------------------------------------------------------------
-// PWM (TCA0 split mode)
+// PWM (TCA0 split mode) + dithering
 // ---------------------------------------------------------------------------
 
-// Map logical brightness → PWM duty. Square law (~gamma 2.0) so equal joystick
-// travel gives roughly equal perceived brightness change, lifted off zero by
-// PWM_MIN_DUTY so the lowest lit step is actually visible on the PT4115.
-static uint8_t dutyFor(uint8_t lvl) {
+// Logical brightness → high-res duty. Square law (~gamma 2.0) so equal joystick
+// travel gives roughly equal perceived change, lifted off zero by PWM_MIN_DUTY
+// so the lowest lit step is actually visible on the PT4115.
+static uint16_t gammaHR(uint8_t lvl) {
   if (lvl == 0) return 0;
-  uint32_t span = 255u - PWM_MIN_DUTY;
-  return PWM_MIN_DUTY + (uint8_t)((span * lvl * lvl) / (255u * 255u));
+  const uint16_t minHR = (uint16_t)PWM_MIN_DUTY << DITHER_BITS;
+  const uint16_t maxHR = HR_MAX;
+  return minHR + (uint16_t)(((uint32_t)(maxHR - minHR) * lvl * lvl) / (255UL * 255UL));
 }
 
-static void pwmWrite(uint8_t ch, uint8_t duty) {
+static inline void writeHCMP(uint8_t ch, uint8_t v) {
   switch (ch) {
-    case 0: TCA0.SPLIT.HCMP0 = duty; break; // PA3 / WO3
-    case 1: TCA0.SPLIT.HCMP1 = duty; break; // PA4 / WO4
-    case 2: TCA0.SPLIT.HCMP2 = duty; break; // PA5 / WO5
+    case 0: TCA0.SPLIT.HCMP0 = v; break; // PA3 / WO3
+    case 1: TCA0.SPLIT.HCMP1 = v; break; // PA4 / WO4
+    case 2: TCA0.SPLIT.HCMP2 = v; break; // PA5 / WO5
   }
 }
 
-// Push a channel's logical level (respecting mute) out to the driver.
-static void applyChannel(uint8_t ch) {
-  pwmWrite(ch, muted[ch] ? 0 : dutyFor(level[ch]));
+static inline void setHR(uint8_t ch, uint16_t hr) {
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { dutyHR[ch] = hr; }
+}
+
+// Fires at the high-byte timer's BOTTOM, once per PWM period (~976 Hz). Renders
+// each channel's high-res duty to the 8-bit compare register, spreading the
+// fractional part over time via first-order sigma-delta.
+ISR(TCA0_HUNF_vect) {
+  static uint8_t ditherAcc[NUM_CHANNELS];
+  for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
+    uint16_t hr   = dutyHR[ch];
+    uint8_t  base = hr >> DITHER_BITS;
+    uint8_t  frac = hr & (DITHER_STEPS - 1);
+    uint8_t  a    = ditherAcc[ch] + frac;
+    uint8_t  carry = 0;
+    if (a >= DITHER_STEPS) { a -= DITHER_STEPS; carry = 1; }
+    ditherAcc[ch] = a;
+    uint16_t out = (uint16_t)base + carry;
+    if (out > 255) out = 255;
+    writeHCMP(ch, (uint8_t)out);
+  }
+  TCA0.SPLIT.INTFLAGS = TCA_SPLIT_HUNF_bm;
 }
 
 static void pwmInit() {
@@ -84,22 +119,45 @@ static void pwmInit() {
   TCA0.SPLIT.HCMP0 = 0;
   TCA0.SPLIT.HCMP1 = 0;
   TCA0.SPLIT.HCMP2 = 0;
+  TCA0.SPLIT.INTFLAGS = TCA_SPLIT_HUNF_bm;         // clear stale flag
+  TCA0.SPLIT.INTCTRL = TCA_SPLIT_HUNF_bm;          // dither ISR each period
   TCA0.SPLIT.CTRLA = PWM_CLKSEL | TCA_SPLIT_ENABLE_bm;
+}
+
+// ---------------------------------------------------------------------------
+// Rendering: setpoint → slewed display → high-res duty (ISR does the rest)
+// ---------------------------------------------------------------------------
+
+static void renderChannel(uint8_t ch) {
+  setHR(ch, gammaHR((uint8_t)(disp[ch] >> 8)));
+}
+
+// Glide each channel's display level toward its target (0 when muted). Fast
+// enough to track the live joystick ramp without lag, slow enough that a
+// toggle or boot restore reads as a gentle fade.
+static void slewAndRender(uint32_t dtMs) {
+  int32_t step = FADE_SLEW * (int32_t)dtMs;
+  if (step <= 0) step = 1;
+  for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
+    int32_t target = (int32_t)(muted[ch] ? 0 : level[ch]) << 8;
+    int32_t d = target - disp[ch];
+    if (d > step)       disp[ch] += step;
+    else if (d < -step) disp[ch] -= step;
+    else                disp[ch]  = target;
+    renderChannel(ch);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Persistence
 // ---------------------------------------------------------------------------
 
-static void markDirty() {
-  dirty = true;
-  dirtyAt = millis();
-}
+static void markDirty() { dirty = true; dirtyAt = millis(); }
 
 static void loadState() {
   Persist p;
   EEPROM.get(0, p);
-  if (p.magic == EE_MAGIC && p.selected < NUM_CHANNELS) {
+  if (p.magic == EE_MAGIC && p.version == EE_VERSION && p.selected < NUM_CHANNELS) {
     selected = p.selected;
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
       level[i] = p.level[i];
@@ -120,6 +178,7 @@ static void loadState() {
 static void saveState() {
   Persist p;
   p.magic = EE_MAGIC;
+  p.version = EE_VERSION;
   p.selected = selected;
   for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
     p.level[i] = level[i];
@@ -131,7 +190,7 @@ static void saveState() {
 
 // ---------------------------------------------------------------------------
 // Feedback: blink the selected channel so the user sees which one they picked.
-// Only the selected channel is disturbed; the others keep their PWM in hardware.
+// Only the selected channel is disturbed; the others hold their dithered PWM.
 // ---------------------------------------------------------------------------
 
 static void ackBlink(uint8_t ch) {
@@ -139,9 +198,9 @@ static void ackBlink(uint8_t ch) {
   for (uint8_t i = 0; i < 2; i++) {
     // If the light is on, dip it; if it's off, pulse it up — either way it
     // visibly "answers".
-    pwmWrite(ch, lit ? 0 : dutyFor(DEFAULT_LEVEL));
+    setHR(ch, lit ? 0 : gammaHR(DEFAULT_LEVEL));
     delay(80);
-    applyChannel(ch);
+    setHR(ch, gammaHR((uint8_t)(disp[ch] >> 8)));   // back to current display
     delay(90);
   }
 }
@@ -176,7 +235,6 @@ static void handleSwitch() {
           levelAcc[selected] = (int32_t)DEFAULT_LEVEL << 8;
         }
       }
-      applyChannel(selected);
       markDirty();
     }
     return;
@@ -185,10 +243,7 @@ static void handleSwitch() {
   // Held past the threshold → all off.
   if (swPressed && !swLongFired && now - swChangedAt >= SW_LONGPRESS_MS) {
     swLongFired = true;
-    for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
-      muted[i] = true;
-      applyChannel(i);
-    }
+    for (uint8_t i = 0; i < NUM_CHANNELS; i++) muted[i] = true;
     markDirty();
   }
 }
@@ -208,9 +263,8 @@ static void handleBrightness(uint32_t dtMs) {
   int16_t mag = (y < 0 ? -y : y) - JOY_DEADZONE;
   if (mag <= 0) return;
 
-  // step (in level<<8 units) ≈ mag * dt * gain. Gain chosen so full deflection
+  // step (in level<<8 units) ≈ mag * dt * gain, chosen so full deflection
   // (~390 past the deadzone) sweeps 0..255<<8 in RAMP_FULL_MS.
-  //   full = (255<<8) / RAMP_FULL_MS per ms, spread over ~390 of magnitude.
   const int32_t gainNum = ((int32_t)255 << 8);
   int32_t step = ((int32_t)mag * (int32_t)dtMs * gainNum) /
                  ((int32_t)390 * RAMP_FULL_MS);
@@ -222,7 +276,6 @@ static void handleBrightness(uint32_t dtMs) {
 
   level[selected] = (uint8_t)(acc >> 8);
   muted[selected] = false;              // actively adjusting un-mutes
-  applyChannel(selected);
   markDirty();
 }
 
@@ -272,9 +325,22 @@ void setup() {
 
   calibrateCentre();
   loadState();
-  for (uint8_t i = 0; i < NUM_CHANNELS; i++) applyChannel(i);
+
+  // Soft-start: displays begin at 0 and glide up to the restored scene.
+  for (uint8_t i = 0; i < NUM_CHANNELS; i++) disp[i] = 0;
+  uint32_t t0 = millis(), prev = t0;
+  while (millis() - t0 <= (uint32_t)FADE_MS + 40) {
+    uint32_t now = millis();
+    slewAndRender(now - prev);
+    prev = now;
+    delay(2);
+  }
 
   ackBlink(selected);          // show which channel is active at startup
+
+#if GLIM_WATCHDOG
+  _PROTECTED_WRITE(WDT.CTRLA, WDT_PERIOD_2KCLK_gc);   // ~2 s
+#endif
   lastTick = millis();
 }
 
@@ -286,8 +352,13 @@ void loop() {
   handleBrightness(dt);
   handleSelect();
   handleSwitch();
+  slewAndRender(dt);
 
   if (dirty && (now - dirtyAt) >= EEPROM_SAVE_DELAY_MS) saveState();
+
+#if GLIM_WATCHDOG
+  wdt_reset();
+#endif
 
 #if GLIM_DEBUG
   static uint32_t dbg = 0;

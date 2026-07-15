@@ -30,6 +30,12 @@ At power-on the selected channel blinks once, so you always know where you are.
 - **It remembers.** State is written to EEPROM a few seconds after you stop, and
   restored on boot — so a wall switch (or a power blip) brings the room back the
   way you left it, not black or blazing.
+- **Nothing snaps.** On/off toggles, all-off, and the boot restore all *fade*
+  over a couple hundred ms rather than jumping. The fade is fast enough that it
+  never lags the live joystick ramp.
+- **Smooth at the bottom.** The 8-bit PWM is temporally dithered (sigma-delta),
+  buying extra effective resolution so deep dimming glides instead of
+  stair-stepping through visible steps.
 
 ## Tuning
 
@@ -44,6 +50,8 @@ most likely to touch:
 | `JOY_X_THRESH` / `JOY_X_REARM` | How hard you must flick to change channel, and how far back to centre before the next flick counts. |
 | `DEFAULT_LEVEL` | Brightness a channel comes up at on first boot / first tap-on. |
 | `PWM_MIN_DUTY` | The dimmest lit step. Raise it if low settings flicker or drop out on the PT4115. |
+| `FADE_MS` | Fade time for on/off toggles and the boot restore. Lower = snappier. |
+| `DITHER_BITS` | Extra dimming resolution (0 disables). Higher is smoother but the dither pattern slows — keep ≤3 at ~1 kHz PWM to stay flicker-free. |
 | `SW_LONGPRESS_MS` | How long "hold" is before it means all-off. |
 
 ### Calibration note

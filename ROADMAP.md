@@ -44,13 +44,15 @@ before you ever need a bigger chip — see Tier 2.
 ## Tier 0 — firmware only (no hardware change, free)
 
 These need nothing but a reflash. Highest value-per-effort; do these first.
+**Dithering, soft transitions, the watchdog, and EEPROM versioning shipped in the
+firmware — the ✅ rows below.**
 
 | Item | Why | Notes |
 |------|-----|-------|
-| **Temporal dithering** | Biggest perceived-quality win. 8-bit PWM is coarse at the bottom; dithering between adjacent duty steps buys ~10–11 effective bits, so deep dimming stops stair-stepping. | Toggle duty ±1 across frames from a TCA overflow / TCB0 ISR. |
-| **Soft transitions** | Fade in/out on power-up, toggle, and scene changes instead of snapping. Feels premium, easier on the eye at night. | Reuse the existing ramp accumulator. |
-| **Watchdog** | It's an unattended, installed device. WDT auto-recovers from any hang. | `while(1)`-safe; kick it in `loop()`. |
-| **EEPROM struct versioning** | Add a `version` byte beside the magic so future firmware can migrate saved state instead of resetting the room to defaults on update. | Cheap insurance. |
+| ✅ **Temporal dithering** | Biggest perceived-quality win. 8-bit PWM is coarse at the bottom; dithering between adjacent duty steps buys extra effective bits, so deep dimming stops stair-stepping. | *Done:* first-order sigma-delta in the `TCA0_HUNF` ISR, `DITHER_BITS` in config. |
+| ✅ **Soft transitions** | Fade in/out on power-up, toggle, and scene changes instead of snapping. Feels premium, easier on the eye at night. | *Done:* setpoint→slewed-display model, `FADE_MS` in config. |
+| ✅ **Watchdog** | It's an unattended, installed device. WDT auto-recovers from any hang. | *Done:* ~2 s WDT, kicked in `loop()`, `GLIM_WATCHDOG` in config. |
+| ✅ **EEPROM struct versioning** | A `version` byte beside the magic so future firmware can migrate saved state instead of resetting the room to defaults on update. | *Done:* `EE_VERSION` in the persist struct. |
 | **Factory-reset gesture** | Hold the switch *during power-on* → wipe EEPROM to defaults. Field-recoverable without a programmer. | |
 | **Per-channel min/max clamps** | Some LED strings flicker below X% or are never wanted above Y%. Config-only limits. | In `config.h`. |
 | **Startup-mode option** | restore-last (current) / all-on-default / all-off, selectable. | Config flag. |
@@ -109,10 +111,11 @@ requirement can't be met on a tiny part:
 
 ## Suggested order
 
-1. **Tier 0 polish** — dithering, soft transitions, watchdog, EEPROM versioning,
-   factory reset. Free, and it's the difference between "works" and "feels good."
+1. ✅ **Tier 0 polish** — dithering, soft transitions, watchdog, and EEPROM
+   versioning are shipped. (Factory-reset gesture still to do.)
 2. **Indicator LEDs** (your idea) — do it now; it's free and informative.
 3. **IR receiver + status pixel** — the two features that most improve daily use.
+   Decided: **learn-any-NEC** remote handling, and a **WS2812 status pixel on PB0**.
 4. **rev2 PCB** — fold the above in, add protection, decide 3 vs 6 channels.
 5. **Optional sensors** (ambient / PIR) — only if a given install wants automation,
    always behind a config flag.

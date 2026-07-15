@@ -53,6 +53,18 @@
 // Smaller = snappier, larger = more gentle. Partial deflection is proportional.
 #define RAMP_FULL_MS 2500
 
+// Soft transitions: on/off toggles, all-off, and the boot restore glide over
+// this many ms instead of snapping. Fast enough that it doesn't lag the live
+// joystick ramp; slow enough to feel gentle on a step change.
+#define FADE_MS 250
+
+// Temporal dithering: buys brightness resolution below the 8-bit PWM floor by
+// nudging duty ±1 across frames (first-order sigma-delta), so deep dimming
+// stops stair-stepping. DITHER_BITS extra bits, 0 disables. The dither pattern
+// repeats at PWM_freq / 2^DITHER_BITS, so keep it high enough to stay invisible:
+// at ~976 Hz, 2 bits → 244 Hz (safe), 3 → 122 Hz, 4 → 61 Hz (risks flicker).
+#define DITHER_BITS 2
+
 // ---------------------------------------------------------------------------
 // Joystick feel
 // ---------------------------------------------------------------------------
@@ -80,6 +92,15 @@
 // so a wall-switch power cycle restores the previous scene without hammering
 // the EEPROM on every tick.
 #define EEPROM_SAVE_DELAY_MS 3000
+
+// ---------------------------------------------------------------------------
+// Reliability
+// ---------------------------------------------------------------------------
+
+// Watchdog: auto-reset if loop() ever wedges. It's an installed, unattended
+// light — cheap insurance. Timeout is ~2 s; loop() and the boot sequence both
+// finish well inside that.
+#define GLIM_WATCHDOG 1
 
 // ---------------------------------------------------------------------------
 // Debug
