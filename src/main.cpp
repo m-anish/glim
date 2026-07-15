@@ -188,6 +188,38 @@ static void saveState() {
   dirty = false;
 }
 
+// If the joystick button is held at power-on, wipe saved state back to
+// defaults. All channels swell up together as a "charging" cue while held; a
+// flash confirms the wipe. Released early → cancelled, normal boot. Runs after
+// pwmInit() (so it can drive the LEDs) and before loadState() (so the wipe
+// takes effect). The watchdog isn't running yet, so the long hold is safe.
+static void setAllHR(uint16_t hr) {
+  for (uint8_t c = 0; c < NUM_CHANNELS; c++) setHR(c, hr);
+}
+
+static void factoryResetCheck() {
+  if (digitalRead(JOY_SW_PIN) != LOW) return;      // not held → normal boot
+
+  uint32_t t0 = millis();
+  while (digitalRead(JOY_SW_PIN) == LOW) {
+    uint32_t held = millis() - t0;
+    if (held >= FACTORY_HOLD_MS) {
+      Persist blank;                                // invalidate saved state
+      blank.magic = 0xFFFF;
+      EEPROM.put(0, blank);
+      for (uint8_t f = 0; f < 6; f++) {             // confirm: flash all channels
+        setAllHR((f & 1) ? 0 : gammaHR(DEFAULT_LEVEL));
+        delay(110);
+      }
+      setAllHR(0);
+      return;                                       // loadState() → defaults
+    }
+    setAllHR(gammaHR((uint8_t)((held * 255) / FACTORY_HOLD_MS)));  // swell up
+    delay(5);
+  }
+  setAllHR(0);                                      // released early → cancel
+}
+
 // ---------------------------------------------------------------------------
 // Feedback: blink the selected channel so the user sees which one they picked.
 // Only the selected channel is disturbed; the others hold their dithered PWM.
@@ -323,6 +355,9 @@ void setup() {
   Serial.println(F("glim boot"));
 #endif
 
+#if GLIM_FACTORY_RESET
+  factoryResetCheck();
+#endif
   calibrateCentre();
   loadState();
 

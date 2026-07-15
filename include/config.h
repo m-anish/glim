@@ -102,6 +102,12 @@
 // finish well inside that.
 #define GLIM_WATCHDOG 1
 
+// Factory reset: power on with the joystick button held. All channels swell up
+// together as you hold; once they hit full and flash, saved state is wiped back
+// to defaults. Release before then to cancel. FACTORY_HOLD_MS is the hold time.
+#define GLIM_FACTORY_RESET 1
+#define FACTORY_HOLD_MS 2000
+
 // ---------------------------------------------------------------------------
 // Debug
 // ---------------------------------------------------------------------------

@@ -14,6 +14,11 @@ the code. One joystick, four gestures.
 
 At power-on the selected channel blinks once, so you always know where you are.
 
+**Maintenance gesture — factory reset:** power on with the button held. All three
+channels swell up together as you keep holding; once they reach full and flash,
+saved brightness/selection is wiped back to defaults. Let go before the flash to
+cancel and boot normally.
+
 ## How it feels, and why
 
 - **Proportional ramp.** Brightness speed follows how far you push the stick, so
@@ -53,6 +58,7 @@ most likely to touch:
 | `FADE_MS` | Fade time for on/off toggles and the boot restore. Lower = snappier. |
 | `DITHER_BITS` | Extra dimming resolution (0 disables). Higher is smoother but the dither pattern slows — keep ≤3 at ~1 kHz PWM to stay flicker-free. |
 | `SW_LONGPRESS_MS` | How long "hold" is before it means all-off. |
+| `FACTORY_HOLD_MS` | How long the button must be held *at power-on* to wipe to defaults. |
 
 ### Calibration note
 

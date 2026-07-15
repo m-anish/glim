@@ -53,7 +53,7 @@ firmware — the ✅ rows below.**
 | ✅ **Soft transitions** | Fade in/out on power-up, toggle, and scene changes instead of snapping. Feels premium, easier on the eye at night. | *Done:* setpoint→slewed-display model, `FADE_MS` in config. |
 | ✅ **Watchdog** | It's an unattended, installed device. WDT auto-recovers from any hang. | *Done:* ~2 s WDT, kicked in `loop()`, `GLIM_WATCHDOG` in config. |
 | ✅ **EEPROM struct versioning** | A `version` byte beside the magic so future firmware can migrate saved state instead of resetting the room to defaults on update. | *Done:* `EE_VERSION` in the persist struct. |
-| **Factory-reset gesture** | Hold the switch *during power-on* → wipe EEPROM to defaults. Field-recoverable without a programmer. | |
+| ✅ **Factory-reset gesture** | Hold the switch *during power-on* → wipe EEPROM to defaults. Field-recoverable without a programmer. | *Done:* hold-to-arm with swell + flash feedback, `FACTORY_HOLD_MS` in config. |
 | **Per-channel min/max clamps** | Some LED strings flicker below X% or are never wanted above Y%. Config-only limits. | In `config.h`. |
 | **Startup-mode option** | restore-last (current) / all-on-default / all-off, selectable. | Config flag. |
 | **All-off → wake-on-tap sleep** | When every channel is off, deep-sleep the MCU and wake on a switch press. Cuts standby draw to µA (PWM can't run in sleep, so this only applies when dark). | Minor on mains, but a clean "green" default. Joystick-move won't wake it — the switch does. |
@@ -111,8 +111,8 @@ requirement can't be met on a tiny part:
 
 ## Suggested order
 
-1. ✅ **Tier 0 polish** — dithering, soft transitions, watchdog, and EEPROM
-   versioning are shipped. (Factory-reset gesture still to do.)
+1. ✅ **Tier 0 polish** — dithering, soft transitions, watchdog, EEPROM
+   versioning, and the factory-reset gesture are all shipped.
 2. **Indicator LEDs** (your idea) — do it now; it's free and informative.
 3. **IR receiver + status pixel** — the two features that most improve daily use.
    Decided: **learn-any-NEC** remote handling, and a **WS2812 status pixel on PB0**.
