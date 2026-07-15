@@ -1,0 +1,21 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Build artifacts
+*.hex
+*.elf
+*.bin
+*.o
+
+# AI / editor tool local state
+.claude/
+.vscode/
+.cursor/
+.windsurf/
+.zencoder/
+
+# OS cruft
+.DS_Store
+Thumbs.db
