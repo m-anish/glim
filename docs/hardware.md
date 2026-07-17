@@ -16,10 +16,11 @@ free for future expansion.
 | LED channel 3 (PWM) | PA5 | TCA0 WO5 (HCMP2) → PT4115 #3 PWM/DIM |
 | Joystick X | PA1 | ADC AIN1 (left/right → channel select) |
 | Joystick Y | PA2 | ADC AIN2 (up/down → brightness) |
+| Status pixel (WS2812) | PA6 | plain GPIO — colour shows the selected channel |
 | Joystick SW | PA7 | digital input, internal pull-up, active-low |
 | UPDI (program) | PA0 | UPDI, 1 kΩ in series |
-| *free* | PA6 | DAC-capable |
-| *free* | PB0 / PB1 | I²C (SDA / SCL) |
+| *free* | PB0 | I²C SDA — earmarked for the IR receiver |
+| *free* | PB1 | I²C SCL |
 | *free* | PB2 / PB3 | USART (TX / RX) — used for debug serial if enabled |
 
 ### Why this map, and not PWM-on-PA1/PA2

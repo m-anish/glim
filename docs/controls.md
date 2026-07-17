@@ -32,6 +32,10 @@ cancel and boot normally.
 - **The blink is the display.** With no screen, the acknowledge-blink is how the
   device tells you which channel it thinks you mean. Only the selected channel
   blinks; the others hold steady.
+- **The pixel is the other half.** A WS2812 by the joystick holds the selected
+  channel's colour (amber / green / blue), so "which light am I steering?" is
+  answerable at a glance, not just at the moment you flick. When every channel is
+  off it fades to a dim glow — a locator in a dark room.
 - **It remembers.** State is written to EEPROM a few seconds after you stop, and
   restored on boot — so a wall switch (or a power blip) brings the room back the
   way you left it, not black or blazing.

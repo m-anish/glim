@@ -77,19 +77,20 @@ selected* — that's what Add-on C is for.)
 - **Noise:** three switching drivers sit nearby. Use the 100 Ω + 4.7 µF supply
   filter, the 100 nF at the receiver pins, and mount the TSOP away from the
   drivers/inductors. Prefer TSOP38238 over VS1838B for AGC/noise immunity.
-- **Suggested pin:** IR OUT → **PA6** (free; keeps all of PORTB open).
+- **Pin:** IR OUT → **PB0** (PA6 is taken by the status pixel, which is fitted).
 
-## Add-on C — status pixel (optional, the "you are here")
+## Add-on C — status pixel ✅ fitted
 
 The one thing three mirror-LEDs can't show is *which* channel is selected. A
-single addressable LED covers it: color = selected channel, plus distinct
-booting / all-off states.
+single addressable LED covers it: colour = selected channel, dimming to a
+locator glow when everything is off.
 
 | # | Part | Qty | Role |
 |---|------|-----|------|
 | 16 | WS2812B (or a 2-color LED + 2× 1 kΩ) | 1 | selection / status indicator |
 
-- **Suggested pin:** data → **PB0**. megaTinyCore ships `tinyNeoPixel` for WS2812.
+- **Pin:** data → **PA6**. megaTinyCore ships `tinyNeoPixel` for WS2812.
+- Colours and brightness are `STATUS_*` in `config.h`.
 
 ## Pin allocation after add-ons
 
@@ -98,9 +99,9 @@ booting / all-off states.
 | PA0 | UPDI (program) |
 | PA1 / PA2 | Joystick X / Y (ADC) |
 | PA3 / PA4 / PA5 | LED PWM **+ indicator LEDs** (Add-on A) |
-| PA6 | IR receiver OUT (Add-on B) |
+| PA6 | **Status pixel data** (Add-on C) — fitted |
 | PA7 | Joystick SW |
-| PB0 | Status pixel data (Add-on C) |
+| PB0 | IR receiver OUT (Add-on B) — when it arrives |
 | PB1 / PB2 / PB3 | still free (I²C / UART / 3 more PWM channels) |
 
 Everything above still fits the ATtiny814 with 3 spare pins. See

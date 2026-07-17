@@ -23,6 +23,10 @@
 #define JOY_Y_PIN  PIN_PA2   // ADC AIN2  (up/down    → brightness)
 #define JOY_SW_PIN PIN_PA7   // digital, active-low with internal pull-up
 
+// WS2812 status pixel — plain GPIO, any free pin. (PB0/PB1/PB2/PB3 remain free;
+// the IR receiver goes on PB0.)
+#define STATUS_PIXEL_PIN PIN_PA6
+
 #define NUM_CHANNELS 3
 
 // ---------------------------------------------------------------------------
@@ -64,6 +68,25 @@
 // repeats at PWM_freq / 2^DITHER_BITS, so keep it high enough to stay invisible:
 // at ~976 Hz, 2 bits → 244 Hz (safe), 3 → 122 Hz, 4 → 61 Hz (risks flicker).
 #define DITHER_BITS 2
+
+// ---------------------------------------------------------------------------
+// Status pixel (WS2812)
+// ---------------------------------------------------------------------------
+
+// A single addressable LED showing which channel the joystick is steering —
+// the one thing the per-channel indicator LEDs can't tell you, since they mirror
+// level. When every channel is off it drops to a dim glow, so the stick is still
+// findable in a dark room.
+#define GLIM_STATUS_PIXEL 1
+
+// Colour per channel, 0xRRGGBB.
+#define STATUS_COLOR_CH1 0xFF2000   // amber
+#define STATUS_COLOR_CH2 0x00FF30   // green
+#define STATUS_COLOR_CH3 0x0040FF   // blue
+
+// Pixel brightness (0..255): normal, and when all channels are off.
+#define STATUS_BRIGHT      40
+#define STATUS_BRIGHT_IDLE 4
 
 // ---------------------------------------------------------------------------
 // Joystick feel

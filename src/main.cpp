@@ -23,6 +23,10 @@
 #include <util/atomic.h>
 #include "config.h"
 
+#if GLIM_STATUS_PIXEL
+#include <tinyNeoPixel_Static.h>
+#endif
+
 #define DITHER_STEPS (1u << DITHER_BITS)          // sub-frames per dither cycle
 #define HR_MAX       ((uint16_t)255 << DITHER_BITS) // full-scale high-res duty
 #define FADE_SLEW    (((int32_t)255 << 8) / FADE_MS) // display slew, level<<8 per ms
@@ -188,6 +192,44 @@ static void saveState() {
   dirty = false;
 }
 
+// ---------------------------------------------------------------------------
+// Status pixel — colour says which channel the joystick is steering.
+// ---------------------------------------------------------------------------
+
+#if GLIM_STATUS_PIXEL
+static uint8_t pixelBuf[3];
+static tinyNeoPixel statusPixel = tinyNeoPixel(1, STATUS_PIXEL_PIN, NEO_GRB, pixelBuf);
+
+// Only pushed when it actually changes: the WS2812 bit-bang runs with
+// interrupts off for ~30 µs, and there's no reason to nudge the dither ISR more
+// often than necessary.
+static void updateStatusPixel(bool force) {
+  static uint8_t lastSel = 0xFF;
+  static bool    lastIdle = false;
+
+  bool idle = true;
+  for (uint8_t c = 0; c < NUM_CHANNELS; c++)
+    if (!muted[c] && level[c] > 0) { idle = false; break; }
+
+  if (!force && selected == lastSel && idle == lastIdle) return;
+  lastSel = selected;
+  lastIdle = idle;
+
+  static const uint32_t colours[NUM_CHANNELS] = {
+    STATUS_COLOR_CH1, STATUS_COLOR_CH2, STATUS_COLOR_CH3
+  };
+  uint32_t c = colours[selected];
+  uint16_t scale = idle ? STATUS_BRIGHT_IDLE : STATUS_BRIGHT;
+  statusPixel.setPixelColor(0,
+    (uint8_t)(((uint16_t)((c >> 16) & 0xFF) * scale) / 255),
+    (uint8_t)(((uint16_t)((c >>  8) & 0xFF) * scale) / 255),
+    (uint8_t)(((uint16_t)( c        & 0xFF) * scale) / 255));
+  statusPixel.show();
+}
+#else
+static void updateStatusPixel(bool) {}
+#endif
+
 // If the joystick button is held at power-on, wipe saved state back to
 // defaults. All channels swell up together as a "charging" cue while held; a
 // flash confirms the wipe. Released early → cancelled, normal boot. Runs after
@@ -348,6 +390,9 @@ static void calibrateCentre() {
 
 void setup() {
   pinMode(JOY_SW_PIN, INPUT_PULLUP);
+#if GLIM_STATUS_PIXEL
+  pinMode(STATUS_PIXEL_PIN, OUTPUT);   // required by the _Static variant
+#endif
   pwmInit();
 
 #if GLIM_DEBUG
@@ -360,6 +405,7 @@ void setup() {
 #endif
   calibrateCentre();
   loadState();
+  updateStatusPixel(true);
 
   // Soft-start: displays begin at 0 and glide up to the restored scene.
   for (uint8_t i = 0; i < NUM_CHANNELS; i++) disp[i] = 0;
@@ -388,6 +434,7 @@ void loop() {
   handleSelect();
   handleSwitch();
   slewAndRender(dt);
+  updateStatusPixel(false);
 
   if (dirty && (now - dirtyAt) >= EEPROM_SAVE_DELAY_MS) saveState();
 
