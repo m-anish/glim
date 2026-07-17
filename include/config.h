@@ -79,10 +79,14 @@
 // feels wrong, drop/raise RAMP_FULL_MS first.
 #define RAMP_LOW_FACTOR 4
 
-// Soft transitions: on/off toggles, all-off, and the boot restore glide over
-// this many ms instead of snapping. Fast enough that it doesn't lag the live
-// joystick ramp; slow enough to feel gentle on a step change.
-#define FADE_MS 250
+// Soft transitions: on/off toggles, all-off/all-on, and the boot restore glide
+// over this many ms instead of snapping.
+//
+// This is a slew-rate limit, not a filter, so as long as it's comfortably faster
+// than the joystick ramp (~82 levels/s ≈ 21 disp-units/ms at full push, vs ~87
+// here) the display still tracks live dimming exactly — the fade only shows on
+// step changes. Don't push it much past ~1000 ms or the ramp will start to lag.
+#define FADE_MS 750
 
 // Temporal dithering: buys brightness resolution below the 8-bit PWM floor by
 // nudging duty ±1 across frames (first-order sigma-delta), so deep dimming

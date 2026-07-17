@@ -45,6 +45,11 @@ cancel and boot normally.
 - **It remembers.** State is written to EEPROM a few seconds after you stop, and
   restored on boot — so a wall switch (or a power blip) brings the room back the
   way you left it, not black or blazing.
+- **It never boots dark.** Giving glim power is itself a request for light, so if
+  the saved scene was entirely off, it comes up lit at its remembered levels
+  rather than restoring the darkness. Per-channel choices still survive; only a
+  wholly-dark scene is overridden. (Otherwise flipping the wall switch on and
+  getting nothing just looks broken.)
 - **Nothing snaps.** On/off toggles, all-off, and the boot restore all *fade*
   over a couple hundred ms rather than jumping. The fade is fast enough that it
   never lags the live joystick ramp.

@@ -191,6 +191,20 @@ static void loadState() {
       muted[i] = false;
     }
   }
+  // Never boot into darkness. The supply is typically a wall switch, so giving
+  // the thing power is itself a request for light — restoring a saved "all off"
+  // scene would just look broken. Per-channel choices survive; a wholly dark
+  // scene doesn't.
+  bool anyOn = false;
+  for (uint8_t i = 0; i < NUM_CHANNELS; i++)
+    if (!muted[i] && level[i] > 0) { anyOn = true; break; }
+  if (!anyOn) {
+    for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
+      muted[i] = false;
+      if (level[i] == 0) level[i] = DEFAULT_LEVEL;
+    }
+  }
+
   for (uint8_t i = 0; i < NUM_CHANNELS; i++) levelAcc[i] = (int32_t)level[i] << LVL_SHIFT;
 }
 
