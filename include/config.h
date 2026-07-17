@@ -53,9 +53,20 @@
 // has never been set.
 #define DEFAULT_LEVEL 110
 
-// Time (ms) to sweep a channel across its full range at full stick deflection.
-// Smaller = snappier, larger = more gentle. Partial deflection is proportional.
-#define RAMP_FULL_MS 2500
+// Time (ms) to sweep a channel across its full range at full stick deflection,
+// measured at the *top* of the range. Smaller = snappier, larger = more gentle.
+// Partial deflection is proportional, so a gentle push is much slower than this.
+#define RAMP_FULL_MS 12500
+
+// Extra fine control when dim. The ramp runs this many times slower at the
+// bottom of the range than at the top, easing smoothly in between — so you can
+// trim a night-light by tiny amounts without the top end feeling glued. Set to
+// 1 to disable and get a constant rate.
+//
+// With the defaults, a full 0→100% sweep at full push takes roughly 23 s; the
+// bottom of the range crawls, the top moves. If the whole thing feels too slow,
+// drop RAMP_FULL_MS first.
+#define RAMP_LOW_FACTOR 4
 
 // Soft transitions: on/off toggles, all-off, and the boot restore glide over
 // this many ms instead of snapping. Fast enough that it doesn't lag the live

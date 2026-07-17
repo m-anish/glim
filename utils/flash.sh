@@ -120,7 +120,18 @@ fi
 
 PIO_ARGS=()
 (( VERBOSE )) && PIO_ARGS+=(-v)
-[[ -n "$SPEED" ]] && PIO_ARGS+=(--project-option "upload_speed=$SPEED")
+
+# `pio run` has no --project-option, and PLATFORMIO_UPLOAD_SPEED is ignored, so
+# an upload-speed override means handing pio a patched copy of platformio.ini.
+TMPCONF=""
+cleanup() { [[ -n "$TMPCONF" && -f "$TMPCONF" ]] && rm -f "$TMPCONF"; }
+trap cleanup EXIT
+if [[ -n "$SPEED" ]]; then
+  TMPCONF="$(mktemp "${TMPDIR:-/tmp}/glim-pio-XXXXXX.ini")"
+  sed -E "s/^([[:space:]]*upload_speed[[:space:]]*=).*/\1 $SPEED/" platformio.ini > "$TMPCONF"
+  PIO_ARGS+=(-c "$TMPCONF")
+  echo "Upload speed: $SPEED" >&2
+fi
 
 if (( DEBUG )); then
   export PLATFORMIO_BUILD_FLAGS="-DGLIM_DEBUG=1"

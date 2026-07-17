@@ -9,8 +9,8 @@ the code. One joystick, four gestures.
 |---------|--------|
 | **Push up / down** | Ramp the *selected* channel brighter / dimmer. Push a little for fine control, push all the way for a fast sweep. |
 | **Flick left / right** | Move to the previous / next channel (wraps around all 3). The channel you land on **blinks once** so you can see which light you're now controlling. |
-| **Tap the stick (SW)** | Toggle the selected channel on / off. Turning it off remembers the level; turning a never-used channel on gives it a default brightness. |
-| **Hold the stick (SW)** | All channels off. A one-gesture "goodnight". |
+| **Tap the stick (SW)** | Toggle **this** channel on / off. Turning it off remembers the level; turning a never-used channel on gives it a default brightness. |
+| **Hold the stick (SW)** | Toggle **all** channels on / off. Anything lit → everything off ("goodnight"); nothing lit → everything back on at its remembered level. |
 
 At power-on the selected channel blinks once, so you always know where you are.
 
@@ -21,9 +21,15 @@ cancel and boot normally.
 
 ## How it feels, and why
 
+- **Two toggles, same shape.** Tap = this light, hold = all lights. Both are
+  toggles, both remember levels — there's no "off" gesture that lacks an "on".
 - **Proportional ramp.** Brightness speed follows how far you push the stick, so
   you get both fine trimming (nudge) and quick changes (full push) from one axis
   without menus or modes.
+- **Slower where it matters.** The ramp eases down toward the bottom of the range
+  (4× slower at 0 than at full), because picking a *dim* level needs finer
+  control than picking a bright one. At full push that's ~5 levels/sec at the
+  bottom and ~20/sec at the top; a full sweep takes ~23 s.
 - **Perceptually linear.** Duty is gamma-corrected (square law), so the ramp
   looks even top-to-bottom instead of doing everything in the last 10%.
 - **Edge-triggered selection.** A flick changes the channel *once*; you have to
@@ -54,7 +60,8 @@ most likely to touch:
 | Setting | What it does |
 |---------|--------------|
 | `JOY_Y_INVERT`, `JOY_X_INVERT` | Flip an axis if up-is-dimmer or right-is-wrong on your build. Cheap joysticks vary in orientation — expect to set at least one of these. |
-| `RAMP_FULL_MS` | Time for a full-range sweep at full push. Lower = snappier. |
+| `RAMP_FULL_MS` | Ramp speed at the top of the range. **Lower = snappier** — this is the first knob to touch if the ramp feels wrong. |
+| `RAMP_LOW_FACTOR` | How much slower the ramp is when dim vs. bright (4 = 4× slower at the bottom). 1 gives a constant rate. |
 | `JOY_DEADZONE` | How far you can wobble around centre before anything happens. Raise it if a channel drifts on its own. |
 | `JOY_X_THRESH` / `JOY_X_REARM` | How hard you must flick to change channel, and how far back to centre before the next flick counts. |
 | `DEFAULT_LEVEL` | Brightness a channel comes up at on first boot / first tap-on. |

@@ -31,13 +31,27 @@
 #define HR_MAX       ((uint16_t)255 << DITHER_BITS) // full-scale high-res duty
 #define FADE_SLEW    (((int32_t)255 << 8) / FADE_MS) // display slew, level<<8 per ms
 
+// The ramp accumulator carries 16 fractional bits. That much headroom matters:
+// at slow rates a whole millisecond's worth of ramp is a tiny fraction of one
+// brightness level, and anything coarser would truncate it to nothing (or, if
+// you paper over that with a minimum step, make the rate depend on how fast
+// loop() happens to spin rather than on elapsed time).
+#define LVL_SHIFT 16
+#define LVL_MAX   ((int32_t)255 << LVL_SHIFT)
+#define RATE_FULL (LVL_MAX / RAMP_FULL_MS)        // accumulator units per ms, full push
+#define JOY_SPAN  (512 - JOY_DEADZONE)            // usable deflection past the deadzone
+
+// Don't let a blocking stretch (ack blink, EEPROM write) integrate as one big
+// jump when the loop resumes.
+#define DT_CLAMP_MS 50
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 static uint8_t  level[NUM_CHANNELS];    // setpoint brightness 0..255 (0 = dark)
 static bool     muted[NUM_CHANNELS];    // toggled off, but remembers its level
-static int32_t  levelAcc[NUM_CHANNELS]; // ramp accumulator, level << 8
+static int32_t  levelAcc[NUM_CHANNELS]; // ramp accumulator, level << LVL_SHIFT
 static int32_t  disp[NUM_CHANNELS];     // slewed display level, level << 8
 static uint8_t  selected = 0;           // channel the joystick is steering
 
@@ -140,8 +154,9 @@ static void renderChannel(uint8_t ch) {
 // enough to track the live joystick ramp without lag, slow enough that a
 // toggle or boot restore reads as a gentle fade.
 static void slewAndRender(uint32_t dtMs) {
+  // No floor on the step: with dt == 0 this correctly does nothing rather than
+  // creeping once per loop iteration.
   int32_t step = FADE_SLEW * (int32_t)dtMs;
-  if (step <= 0) step = 1;
   for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
     int32_t target = (int32_t)(muted[ch] ? 0 : level[ch]) << 8;
     int32_t d = target - disp[ch];
@@ -176,7 +191,7 @@ static void loadState() {
       muted[i] = false;
     }
   }
-  for (uint8_t i = 0; i < NUM_CHANNELS; i++) levelAcc[i] = (int32_t)level[i] << 8;
+  for (uint8_t i = 0; i < NUM_CHANNELS; i++) levelAcc[i] = (int32_t)level[i] << LVL_SHIFT;
 }
 
 static void saveState() {
@@ -306,7 +321,7 @@ static void handleSwitch() {
         muted[selected] = false;                   // on
         if (level[selected] == 0) {
           level[selected] = DEFAULT_LEVEL;
-          levelAcc[selected] = (int32_t)DEFAULT_LEVEL << 8;
+          levelAcc[selected] = (int32_t)DEFAULT_LEVEL << LVL_SHIFT;
         }
       }
       markDirty();
@@ -314,10 +329,25 @@ static void handleSwitch() {
     return;
   }
 
-  // Held past the threshold → all off.
+  // Held past the threshold → toggle *everything*, mirroring what a tap does to
+  // one channel. Anything lit → all off; nothing lit → all back on.
   if (swPressed && !swLongFired && now - swChangedAt >= SW_LONGPRESS_MS) {
     swLongFired = true;
-    for (uint8_t i = 0; i < NUM_CHANNELS; i++) muted[i] = true;
+    bool anyOn = false;
+    for (uint8_t i = 0; i < NUM_CHANNELS; i++)
+      if (!muted[i] && level[i] > 0) { anyOn = true; break; }
+
+    for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
+      if (anyOn) {
+        muted[i] = true;                     // off, remembering levels
+      } else {
+        muted[i] = false;                    // on
+        if (level[i] == 0) {                 // never set → give it something
+          level[i] = DEFAULT_LEVEL;
+          levelAcc[i] = (int32_t)DEFAULT_LEVEL << LVL_SHIFT;
+        }
+      }
+    }
     markDirty();
   }
 }
@@ -333,22 +363,30 @@ static int16_t deflection(uint8_t pin, int16_t centre, bool invert) {
 
 // Up/down: ramp the selected channel, speed proportional to deflection.
 static void handleBrightness(uint32_t dtMs) {
+  if (dtMs == 0) return;                // no time passed → nothing to integrate
+
   int16_t y = deflection(JOY_Y_PIN, centreY, JOY_Y_INVERT);
   int16_t mag = (y < 0 ? -y : y) - JOY_DEADZONE;
   if (mag <= 0) return;
-
-  // step (in level<<8 units) ≈ mag * dt * gain, chosen so full deflection
-  // (~390 past the deadzone) sweeps 0..255<<8 in RAMP_FULL_MS.
-  const int32_t gainNum = ((int32_t)255 << 8);
-  int32_t step = ((int32_t)mag * (int32_t)dtMs * gainNum) /
-                 ((int32_t)390 * RAMP_FULL_MS);
-  if (step == 0) step = 1;
+  if (mag > JOY_SPAN) mag = JOY_SPAN;
 
   int32_t &acc = levelAcc[selected];
-  if (y > 0) { acc += step; if (acc > (255 << 8)) acc = (255 << 8); }
+
+  // Ease the rate down toward the bottom of the range: at level 0 the ramp runs
+  // RAMP_LOW_FACTOR times slower than at full brightness, scaling linearly in
+  // between. Dim settings get fine trimming; the top end still moves.
+  //   factor(lvl) = (255 + (F-1)·lvl) / (255·F)   →  1/F at lvl 0, 1 at lvl 255
+  uint8_t lvl = (uint8_t)(acc >> LVL_SHIFT);
+  int32_t rate = ((int32_t)RATE_FULL *
+                  (255 + (int32_t)(RAMP_LOW_FACTOR - 1) * lvl)) /
+                 (255L * RAMP_LOW_FACTOR);
+
+  int32_t step = (rate * (int32_t)mag * (int32_t)dtMs) / JOY_SPAN;
+
+  if (y > 0) { acc += step; if (acc > LVL_MAX) acc = LVL_MAX; }
   else       { acc -= step; if (acc < 0) acc = 0; }
 
-  level[selected] = (uint8_t)(acc >> 8);
+  level[selected] = (uint8_t)(acc >> LVL_SHIFT);
   muted[selected] = false;              // actively adjusting un-mutes
   markDirty();
 }
@@ -429,6 +467,7 @@ void loop() {
   uint32_t now = millis();
   uint32_t dt = now - lastTick;
   lastTick = now;
+  if (dt > DT_CLAMP_MS) dt = DT_CLAMP_MS;
 
   handleBrightness(dt);
   handleSelect();
