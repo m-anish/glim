@@ -86,7 +86,17 @@
 // than the joystick ramp (~82 levels/s ≈ 21 disp-units/ms at full push, vs ~87
 // here) the display still tracks live dimming exactly — the fade only shows on
 // step changes. Don't push it much past ~1000 ms or the ramp will start to lag.
+//
+// Being a *rate*, a toggle to a dim level lands proportionally sooner than one
+// to full — which is what you want for a toggle (it stays responsive), but not
+// for the power-up fade. That one gets its own fixed duration below.
 #define FADE_MS 750
+
+// Power-up fade-in, as a fixed duration: the boot fade takes this long whether
+// it's rising to 10% or 100%. That's what makes it read as a deliberate "waking
+// up" rather than a flick — at a plain rate limit, restoring a dim scene would
+// be over in a few tens of ms and look like a snap.
+#define BOOT_FADE_MS 1200
 
 // Temporal dithering: buys brightness resolution below the 8-bit PWM floor by
 // nudging duty ±1 across frames (first-order sigma-delta), so deep dimming

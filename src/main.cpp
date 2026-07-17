@@ -459,14 +459,26 @@ void setup() {
   loadState();
   updateStatusPixel(true);
 
-  // Soft-start: displays begin at 0 and glide up to the restored scene.
+  // Soft-start: interpolate every display from 0 up to the restored scene over a
+  // fixed BOOT_FADE_MS. Deliberately not the FADE_MS slew limiter — that's a
+  // rate, so restoring a dim scene would finish in tens of ms and read as a snap
+  // no matter how gentle the rate. Here dim and bright scenes take equally long.
   for (uint8_t i = 0; i < NUM_CHANNELS; i++) disp[i] = 0;
-  uint32_t t0 = millis(), prev = t0;
-  while (millis() - t0 <= (uint32_t)FADE_MS + 40) {
-    uint32_t now = millis();
-    slewAndRender(now - prev);
-    prev = now;
+  uint32_t t0 = millis();
+  for (;;) {
+    uint32_t e = millis() - t0;
+    if (e >= (uint32_t)BOOT_FADE_MS) break;
+    uint16_t f = (uint16_t)((e * 256UL) / BOOT_FADE_MS);   // 0..255 of the way
+    for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
+      int32_t target = (int32_t)(muted[ch] ? 0 : level[ch]) << 8;
+      disp[ch] = (target * (int32_t)f) >> 8;
+      renderChannel(ch);
+    }
     delay(2);
+  }
+  for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {   // land exactly on target
+    disp[ch] = (int32_t)(muted[ch] ? 0 : level[ch]) << 8;
+    renderChannel(ch);
   }
 
   ackBlink(selected);          // show which channel is active at startup
