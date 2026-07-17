@@ -67,16 +67,21 @@ speed, tap vs. hold, and everything you can tune.
 ## Build & flash
 
 Firmware is C++ on [megaTinyCore](https://github.com/SpenceKonde/megaTinyCore),
-built with PlatformIO and flashed over UPDI with a serial adapter:
+built with PlatformIO and flashed over UPDI with a serial adapter.
+`utils/flash.sh` finds the adapter for you — no port to hardcode:
 
 ```bash
-pio run                         # compile
-pio run -t upload               # flash via serialUPDI
-pio run -t fuses -e set_fuses   # write clock/BOD/EESAVE fuses (once)
+utils/flash.sh                    # build + flash
+utils/flash.sh --fuses            # write clock/BOD/EESAVE fuses (once, fresh chip)
+utils/flash.sh --debug --monitor  # flash a telemetry build, then watch it
+utils/flash.sh --list             # which serial ports can I see?
+utils/flash.sh --help             # all the flags
 ```
 
-Edit `upload_port` in [platformio.ini](platformio.ini) to match your adapter.
-Wiring for the programmer is in [docs/hardware.md](docs/hardware.md).
+Port detection lives in `utils/find-port.sh` (it deliberately ignores the
+Bluetooth serial ports that trip up naive auto-detect). Pass `--port` to
+override, `--slow` if an upload is flaky. Programmer wiring is in
+[docs/hardware.md](docs/hardware.md).
 
 ## Layout
 
@@ -85,6 +90,9 @@ glim/
 ├── src/main.cpp        firmware
 ├── include/config.h    pins + every tunable in one place
 ├── platformio.ini      build / upload config
+├── utils/
+│   ├── flash.sh         build/flash/monitor wrapper (start here)
+│   └── find-port.sh     locate the USB-serial programmer
 ├── hardware/
 │   └── BOM.md           parts list + build plan (core, indicators, IR)
 ├── ROADMAP.md          where it goes next

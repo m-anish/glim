@@ -103,13 +103,17 @@ enough) — serialUPDI does not power the target.
 Then:
 
 ```bash
-pio run -t fuses -e set_fuses   # once: clock source, BOD, EESAVE
-pio run -t upload               # flash firmware
+utils/flash.sh --fuses   # once on a fresh chip: clock source, BOD, EESAVE
+utils/flash.sh           # build + flash firmware
 ```
 
-Set `upload_port` in `platformio.ini` to your adapter (`ls /dev/cu.*` on macOS,
-`/dev/ttyUSB*` on Linux, `COMx` on Windows). If uploads are flaky, drop
-`upload_speed` to `115200`.
+The adapter is auto-detected — `utils/flash.sh --list` shows what it can see,
+`--port` overrides it, and `--slow` drops the upload to 115200 if it's flaky.
+
+**Fuses matter:** a factory chip is fused for a 20 MHz base oscillator, while the
+firmware is built for 16 MHz — without `--fuses` every timing (PWM frequency,
+`millis()`, baud) runs ~25% fast. `--fuses` also enables EESAVE, so your saved
+brightness survives reflashing. It never touches the UPDI pin configuration.
 
 ## Datasheet
 

@@ -137,4 +137,9 @@
 
 // Set to 1 to stream joystick/level telemetry on USART0 (PB2=TX, PB3=RX) at
 // 115200. Handy for calibration; leave at 0 for production.
+//
+// Guarded so it can be overridden at build time without editing this file —
+// `utils/flash.sh --debug` does exactly that.
+#ifndef GLIM_DEBUG
 #define GLIM_DEBUG 0
+#endif

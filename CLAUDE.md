@@ -44,12 +44,31 @@ inversion, EEPROM save delay, debug flag. Prefer changing `config.h` over
 hardcoding in `main.cpp`. The firmware is deliberately one file plus config so it
 stays portable to a rev2 board or a different MCU.
 
+## Build / flash workflow
+
+Everything goes through `utils/flash.sh` — it auto-detects the USB-serial
+programmer (`utils/find-port.sh`) so no port is hardcoded in `platformio.ini`.
+
+```bash
+utils/flash.sh                    # build + upload
+utils/flash.sh --build            # compile only
+utils/flash.sh --fuses            # once per fresh chip
+utils/flash.sh --debug --monitor  # GLIM_DEBUG=1 build, upload, then console
+utils/flash.sh --port /dev/... --slow   # override port / drop to 115200
+```
+
+`--debug` works by passing `-DGLIM_DEBUG=1`, which is why `GLIM_DEBUG` in
+`config.h` is wrapped in `#ifndef` — keep that guard if you add build-time
+toggles. Note `--monitor` needs the adapter's RX on **PB2**, not the UPDI node.
+
+Never set `board_hardware.updipin` to anything but `updi` — it would lock UPDI
+out of the chip.
+
 ## Verifying changes
 
 There is **no host test suite** — this is firmware. Verification means flashing to
-the ATtiny814 and driving the joystick. Type-checking/compiling
-(`pio run`) catches syntax and register-name errors but not behaviour. For live
-telemetry set `GLIM_DEBUG 1` and watch USART0 (PB2=TX) at 115200.
+the ATtiny814 and driving the joystick. Compiling (`utils/flash.sh --build`)
+catches syntax and register-name errors but not behaviour.
 
 Cheap joysticks vary in orientation: after any change touching the axes, confirm
 up=brighter and right=next-channel on real hardware, and flip `JOY_*_INVERT` if
