@@ -14,8 +14,8 @@ free for future expansion.
 | LED channel 1 (PWM) | PA3 | TCA0 WO3 (HCMP0) → PT4115 #1 PWM/DIM |
 | LED channel 2 (PWM) | PA4 | TCA0 WO4 (HCMP1) → PT4115 #2 PWM/DIM |
 | LED channel 3 (PWM) | PA5 | TCA0 WO5 (HCMP2) → PT4115 #3 PWM/DIM |
-| Joystick X | PA1 | ADC AIN1 (left/right → channel select) |
-| Joystick Y | PA2 | ADC AIN2 (up/down → brightness) |
+| Joystick X | PA2 | ADC AIN2 (left/right → channel select) |
+| Joystick Y | PA1 | ADC AIN1 (up/down → brightness) |
 | Status pixel (WS2812) | PA6 | plain GPIO — colour shows the selected channel |
 | Joystick SW | PA7 | digital input, internal pull-up, active-low |
 | UPDI (program) | PA0 | UPDI, 1 kΩ in series |

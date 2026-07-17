@@ -18,9 +18,11 @@
 #define LED2_PIN   PIN_PA4   // TCA0 WO4 / HCMP1
 #define LED3_PIN   PIN_PA5   // TCA0 WO5 / HCMP2
 
-// Joystick. X/Y must be ADC-capable pins; PA1=AIN1, PA2=AIN2.
-#define JOY_X_PIN  PIN_PA1   // ADC AIN1  (left/right → channel select)
-#define JOY_Y_PIN  PIN_PA2   // ADC AIN2  (up/down    → brightness)
+// Joystick. X/Y must be ADC-capable pins; PA1=AIN1, PA2=AIN2. Which axis lands
+// on which pin is down to how the module is wired — swap these two if left/right
+// and up/down come out transposed.
+#define JOY_X_PIN  PIN_PA2   // ADC AIN2  (left/right → channel select)
+#define JOY_Y_PIN  PIN_PA1   // ADC AIN1  (up/down    → brightness)
 #define JOY_SW_PIN PIN_PA7   // digital, active-low with internal pull-up
 
 // WS2812 status pixel — plain GPIO, any free pin. (PB0/PB1/PB2/PB3 remain free;
@@ -56,16 +58,16 @@
 // Time (ms) to sweep a channel across its full range at full stick deflection,
 // measured at the *top* of the range. Smaller = snappier, larger = more gentle.
 // Partial deflection is proportional, so a gentle push is much slower than this.
-#define RAMP_FULL_MS 12500
+#define RAMP_FULL_MS 3125
 
 // Extra fine control when dim. The ramp runs this many times slower at the
 // bottom of the range than at the top, easing smoothly in between — so you can
 // trim a night-light by tiny amounts without the top end feeling glued. Set to
 // 1 to disable and get a constant rate.
 //
-// With the defaults, a full 0→100% sweep at full push takes roughly 23 s; the
-// bottom of the range crawls, the top moves. If the whole thing feels too slow,
-// drop RAMP_FULL_MS first.
+// With the defaults, a full 0→100% sweep at full push takes roughly 6 s; the
+// bottom of the range moves gently, the top moves briskly. If the whole thing
+// feels wrong, drop/raise RAMP_FULL_MS first.
 #define RAMP_LOW_FACTOR 4
 
 // Soft transitions: on/off toggles, all-off, and the boot restore glide over

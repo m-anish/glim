@@ -28,8 +28,8 @@ cancel and boot normally.
   without menus or modes.
 - **Slower where it matters.** The ramp eases down toward the bottom of the range
   (4× slower at 0 than at full), because picking a *dim* level needs finer
-  control than picking a bright one. At full push that's ~5 levels/sec at the
-  bottom and ~20/sec at the top; a full sweep takes ~23 s.
+  control than picking a bright one. At full push that's ~20 levels/sec at the
+  bottom and ~80/sec at the top; a full sweep takes ~6 s.
 - **Perceptually linear.** Duty is gamma-corrected (square law), so the ramp
   looks even top-to-bottom instead of doing everything in the last 10%.
 - **Edge-triggered selection.** A flick changes the channel *once*; you have to
