@@ -53,9 +53,44 @@ normal 16-bit mode TCA0 exposes just WO0–WO2). So the firmware:
    `HPER = 255`, clock `DIV64`;
 3. writes duty straight to `HCMP0/HCMP1/HCMP2` (higher = brighter).
 
-At `F_CPU = 16 MHz`, `DIV64` gives ~976 Hz — flicker-free and comfortable for the
-PT4115. Tune `PWM_CLKSEL` in `config.h` if you want deeper low-end dimming
-(slower) or less stroboscopic shimmer (faster).
+At `F_CPU = 20 MHz`, `DIV256` gives ~305 Hz.
+
+### Why that frequency, and how low the dimming goes
+
+The lowest honest brightness is set by the **driver**, not the timer. The PT4115
+is a hysteretic buck: it needs enough on-time to actually build inductor current
+to regulation. Too short a pulse and output stops being proportional or even
+monotonic. So:
+
+    minimum duty ≈ (PT4115 minimum on-time) × (PWM frequency)
+
+and, with 8-bit resolution:
+
+    (on-time per count) × (PWM frequency) = 1/256   — always
+
+F_CPU cancels out of both. It does **not** move that curve; it only changes which
+discrete points the prescaler can land on. Nor does PWM bit-depth help — a 16-bit
+timer would offer a 62 ns pulse the driver can't act on. The only real levers are
+lowering the PWM frequency or reducing the driver's minimum on-time.
+
+Useful operating points (8-bit, `HPER = 255`):
+
+| Config | PWM freq | on-time per count |
+|---|---|---|
+| 16 MHz, DIV64 | 976 Hz | 4.0 µs |
+| 16 MHz, DIV256 | 244 Hz | 16.0 µs |
+| **20 MHz, DIV256** | **305 Hz** | **12.8 µs** ← current |
+| 20 MHz, DIV64 | 1221 Hz | 3.2 µs |
+
+20 MHz + DIV256 is the best available compromise: 12.8 µs is long enough for the
+PT4115 to reach regulation (so `PWM_MIN_DUTY = 1`, a 0.39% floor ≈ 8% perceived),
+while 305 Hz keeps 25% more flicker margin than 244 Hz. Raise `PWM_MIN_DUTY` if
+the bottom levels misbehave; raise the frequency if you see stroboscopic shimmer.
+
+To go meaningfully lower you'd need hybrid dimming — drive the PT4115's analog
+CTRL pin to scale full-scale current down (TCA0's unused WO0/WO1/WO2 on
+PB0/PB1/PB2, RC-filtered) with PWM on top, for ~1280:1 — or simply reduce the
+full-scale LED current with a larger sense resistor.
 
 ## Power tree
 

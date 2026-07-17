@@ -32,7 +32,14 @@ in `docs/`.
 
 - calls `takeOverTCA0()` (safe: `millis()` is on TCD0, so TCA0 is free);
 - runs TCA0 in **split mode** and writes duty to `HCMP0/HCMP1/HCMP2`
-  (PA3/PA4/PA5), higher = brighter, ~976 Hz at 16 MHz.
+  (PA3/PA4/PA5), higher = brighter, ~305 Hz at 20 MHz (DIV256).
+
+The clock is **20 MHz** (in spec at 5 V per datasheet Table 34-3). Changing
+`board_build.f_cpu` requires a re-fuse (`utils/flash.sh --fuses`), not just a
+reflash, or every timing runs wrong by the ratio. The PWM frequency, dither
+depth, and minimum duty are coupled — see `docs/hardware.md` before touching any
+of them: `(on-time per count) × (PWM freq) = 1/256`, and the dither pattern
+repeats at `PWM_freq / 2^DITHER_BITS` (keep that above ~120 Hz).
 
 Don't reintroduce `analogWrite()` on the LED pins, and don't put `millis()` on
 TCA0 (it would break the PWM takeover).

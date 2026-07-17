@@ -25,7 +25,7 @@ does the same job at campus scale. Part of the
 ## What it does
 
 - Drives **3 independent LED channels** through PT4115 constant-current drivers,
-  dimmed by hardware PWM (~1 kHz).
+  dimmed by hardware PWM (~305 Hz, tuned for how low the drivers can honestly go).
 - **One joystick** does everything:
   - **up / down** — the selected channel gets brighter / dimmer, at a speed that
     follows how far you push.

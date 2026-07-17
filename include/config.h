@@ -35,15 +35,24 @@
 // PWM
 // ---------------------------------------------------------------------------
 
-// TCA0 split clock divider. At F_CPU=16 MHz, DIV64 → 16e6/64/256 ≈ 976 Hz.
-// Lower the frequency (e.g. DIV256 ≈ 244 Hz) if you need cleaner deep dimming
-// from the PT4115 at the very bottom of the range; raise it if you notice
-// stroboscopic shimmer. Must be one of the TCA_SPLIT_CLKSEL_DIVn_gc values.
-#define PWM_CLKSEL TCA_SPLIT_CLKSEL_DIV64_gc
+// TCA0 split clock divider. At F_CPU=20 MHz, DIV256 → 20e6/256/256 ≈ 305 Hz,
+// which makes one duty count 12.8 µs — long enough for the PT4115 to actually
+// reach regulation, so PWM_MIN_DUTY can sit at 1.
+//
+// The tradeoff here is arithmetic, not preference:
+//     (on-time per count) × (PWM frequency) = 1/256,  always.
+// Raising the frequency shortens the pulse the driver must reproduce, which
+// *raises* the lowest honest duty; lowering it risks stroboscopic shimmer.
+// F_CPU doesn't move that curve, it only changes which points you can land on.
+// DIV64 here would give 1221 Hz / 3.2 µs.
+#define PWM_CLKSEL TCA_SPLIT_CLKSEL_DIV256_gc
 
-// Smallest non-zero duty (out of 255). The PT4115 can't cleanly resolve a
-// 1-count on-time at ~1 kHz, so we floor the lit range a little above zero.
-#define PWM_MIN_DUTY 3
+// Smallest non-zero duty (out of 255) → the dimmest lit step, here 1/256 =
+// 0.39% (~8% perceived). At 305 Hz one count is 12.8 µs, which the PT4115
+// should reach regulation within. If the bottom couple of levels flicker, drop
+// out, or stop being monotonic, the driver isn't managing that pulse — raise
+// this back toward 3.
+#define PWM_MIN_DUTY 1
 
 // ---------------------------------------------------------------------------
 // Brightness model
@@ -79,8 +88,10 @@
 // nudging duty ±1 across frames (first-order sigma-delta), so deep dimming
 // stops stair-stepping. DITHER_BITS extra bits, 0 disables. The dither pattern
 // repeats at PWM_freq / 2^DITHER_BITS, so keep it high enough to stay invisible:
-// at ~976 Hz, 2 bits → 244 Hz (safe), 3 → 122 Hz, 4 → 61 Hz (risks flicker).
-#define DITHER_BITS 2
+// at 305 Hz, 1 bit → 152 Hz (safe), 2 → 76 Hz, 3 → 38 Hz (would flicker).
+// Dropping to 1 bit is the price of the lower PWM frequency — dither can only
+// smooth the range *above* the floor, it can't lower the floor itself.
+#define DITHER_BITS 1
 
 // ---------------------------------------------------------------------------
 // Status pixel (WS2812)
